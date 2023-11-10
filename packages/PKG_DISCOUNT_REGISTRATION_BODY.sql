@@ -1,7 +1,6 @@
 /************************************************************************************
 Descripción: BODY, package para procedimiento para cambiar STATUS a "Pagado" y
 			 para job que cambia STATUS a "Vencido" si no pagó a tiempo.
-			 si STATUS es "Sin pagar"
 Autor:       Manuel Alejandro Gallego Jiménez
 Fecha:       17-10-2023 (DD/MM/AA)
 IdGestión:   
@@ -10,7 +9,7 @@ IdGestión:
 
 
 CREATE OR REPLACE PACKAGE BODY PKG_DISCOUNT_REGISTRATION IS
-	-- Procedimiento que cambia STATUS a "Pagado" si su valor era "Sin pagar"
+	-- Procedure that changes STATUS to "Pagado" if its value was "Sin pagar".
 	PROCEDURE UpdateStatus(p_property_id INTEGER) IS
 	BEGIN
 		UPDATE APP_PAGO_PREDIAL.PGP_DISCOUNT_REGISTRATION
@@ -19,15 +18,14 @@ CREATE OR REPLACE PACKAGE BODY PKG_DISCOUNT_REGISTRATION IS
 		COMMIT;
 	END UpdateStatus;
 
-	-- Procedimiento, JOB para actualizar el estado después de "DEADLINE_DATE"
-	-- Creo un procedimiento que recibe un lote individual y realiza la actualizacion
+	-- Procedure to update the status after "DEADLINE_DATE".
+	-- Creates a procedure that receives an individual batch and performs the update.
 	PROCEDURE UpdateDiscountStatusForID(p_id NUMBER) IS
-		max_retries CONSTANT NUMBER := 2; -- Número máximo de reintentos
-		retry_count NUMBER := 0; -- Contador de reintentos
+		max_retries CONSTANT NUMBER := 2; -- Maximum number of retries
+		retry_count NUMBER := 0; -- Retry counter
 	BEGIN
-		-- Inicia un bucle para los reintentos
+		-- Initiates a loop for retries
 		WHILE retry_count < max_retries LOOP
-			-- Logica principal
 			UPDATE APP_PAGO_PREDIAL.PGP_DISCOUNT_REGISTRATION
 			SET STATUS = 'Vencido'
 			WHERE ID_DISCOUNT_REGISTRATION = p_id;
@@ -36,29 +34,28 @@ CREATE OR REPLACE PACKAGE BODY PKG_DISCOUNT_REGISTRATION IS
 		END LOOP;
 	EXCEPTION
 		WHEN OTHERS THEN
-			-- Se produjo un error, realiza un rollback o maneja el error como sea necesario
+			-- An error occurred
 			ROLLBACK;
-			-- Incrementa el contador de reintentos
 		    retry_count := retry_count + 1;
 	END UpdateDiscountStatusForID;
 
-	-- Procedimiento para realizar el procesamiento por lotes en general
+	-- Procedure for performing batch processing in general
 	PROCEDURE CheckAndUpdateStatus IS
-		v_default_date DATE := TO_DATE('2023-11-16 00:00:00', 'YYYY-MM-DD HH24:MI:SS'); 
+		v_default_date DATE := TRUNC(SYSDATE);
 		CURSOR cur_discounts IS
 		SELECT  ID_DISCOUNT_REGISTRATION
 		FROM APP_PAGO_PREDIAL.PGP_DISCOUNT_REGISTRATION
 		WHERE STATUS = 'Sin pagar' AND v_default_date > DEADLINE_DATE;
 		TYPE id_tab_type IS TABLE OF NUMBER;
 		ids id_tab_type;
-		-- Tamaño del lote
-		BATCH_SIZE CONSTANT NUMBER := 1;
+		-- Batch size
+		BATCH_SIZE CONSTANT NUMBER := 10;
 	BEGIN
 		OPEN cur_discounts;
 		LOOP
 			FETCH cur_discounts BULK COLLECT INTO ids LIMIT BATCH_SIZE;
 			EXIT WHEN ids.COUNT = 0;
-	        -- Llamar al procedimiento que actualiza un lote individual
+	        -- Call the procedure that updates an individual batch.
 	        FOR i IN 1..ids.COUNT LOOP
 	        	UpdateDiscountStatusForID(ids(i));
 	        END LOOP;
